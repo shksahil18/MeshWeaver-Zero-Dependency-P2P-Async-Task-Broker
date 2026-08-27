@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "meshweaver"
+version = "0.1.0"
+description = "Zero-infrastructure P2P asynchronous task broker"
+requires-python = ">=3.11"
+dependencies = [
+    "cloudpickle"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest"
+]
+
+[tool.setuptools.packages.find]
+include = ["meshweaver*"]
