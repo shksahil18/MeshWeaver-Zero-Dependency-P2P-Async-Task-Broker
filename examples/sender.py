@@ -1,59 +1,104 @@
+import argparse
 import asyncio
 
 from meshweaver.node import MeshNode
 
-def add_numbers(a, b):
-    """
-    Example remote task.
-    """
-
-    return a + b
-
 
 async def main():
 
+    parser = argparse.ArgumentParser(
+        description="MeshWeaver Week 2 Node"
+    )
+
+    parser.add_argument(
+        "--host",
+        default="127.0.0.1",
+    )
+
+    parser.add_argument(
+        "--port",
+        type=int,
+        required=True,
+    )
+
+    parser.add_argument(
+        "--bootstrap",
+        default=None,
+        help="Bootstrap peer in HOST:PORT format",
+    )
+
+    args = parser.parse_args()
+
     node = MeshNode(
-        host="127.0.0.1",
-        port=9001,
+        host=args.host,
+        port=args.port,
     )
 
     await node.start()
 
-    await asyncio.sleep(1)
+    if args.bootstrap:
 
-    # -------------------------
-    # Test 1: PING
-    # -------------------------
+        host, port = args.bootstrap.split(":")
 
-    print("Sending PING...")
+        await node.bootstrap(
+            host,
+            int(port),
+        )
 
-    node.ping(
-        host="127.0.0.1",
-        port=9002,
-    )
-
-    await asyncio.sleep(1)
-
-    # -------------------------
-    # Test 2: Remote Task
-    # -------------------------
-
-    print()
     print(
-        "Sending serialized task..."
+        "Node is running."
     )
 
-    node.send_task(
-        function=add_numbers,
-        args=(10, 20),
-        host="127.0.0.1",
-        port=9002,
+    print(
+        "Press CTRL+C to stop."
     )
 
-    await asyncio.sleep(5)
+    try:
 
-    await node.stop()
+        while True:
+
+            await asyncio.sleep(10)
+
+            print()
+            print(
+                "[STATUS] Known peers:"
+            )
+
+            node.print_peers()
+
+            print(
+                "[STATUS] Received metrics:"
+            )
+
+            for (
+                node_id,
+                metrics,
+            ) in node.get_peer_metrics().items():
+
+                print(
+                    f"  {node_id:040x} "
+                    f"CPU="
+                    f"{metrics['cpu_percent']:.2f}% "
+                    f"RAM="
+                    f"{metrics['memory_percent']:.2f}%"
+                )
+
+    except asyncio.CancelledError:
+        pass
+
+    finally:
+
+        await node.stop()
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+
+    try:
+
+        asyncio.run(main())
+
+    except KeyboardInterrupt:
+
+        print(
+            "\nNode stopped."
+        )
