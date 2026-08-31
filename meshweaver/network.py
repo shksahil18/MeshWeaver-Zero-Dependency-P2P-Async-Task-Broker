@@ -3,7 +3,7 @@ import asyncio
 
 class MeshUDPProtocol(asyncio.DatagramProtocol):
     """
-    Handles incoming and outgoing UDP datagrams.
+    Async UDP protocol used by MeshWeaver.
     """
 
     def __init__(self, on_message):
@@ -13,11 +13,20 @@ class MeshUDPProtocol(asyncio.DatagramProtocol):
     def connection_made(self, transport):
         self.transport = transport
 
-    def datagram_received(self, data, addr):
-        self.on_message(data, addr)
+    def datagram_received(
+        self,
+        data,
+        addr,
+    ):
+        self.on_message(
+            data,
+            addr,
+        )
 
     def error_received(self, exc):
-        print(f"[NETWORK ERROR] {exc}")
+        print(
+            f"[NETWORK ERROR] {exc}"
+        )
 
     def connection_lost(self, exc):
         self.transport = None
@@ -25,34 +34,43 @@ class MeshUDPProtocol(asyncio.DatagramProtocol):
 
 class UDPNetwork:
     """
-    Async UDP networking layer for MeshWeaver.
+    Asynchronous UDP networking layer.
     """
 
-    def __init__(self, host: str, port: int, on_message):
+    def __init__(
+        self,
+        host: str,
+        port: int,
+        on_message,
+    ):
         self.host = host
         self.port = port
         self.on_message = on_message
         self.transport = None
 
     async def start(self):
-        """
-        Start the UDP endpoint.
-        """
-
         loop = asyncio.get_running_loop()
 
-        transport, _ = await loop.create_datagram_endpoint(
-            lambda: MeshUDPProtocol(self.on_message),
-            local_addr=(self.host, self.port),
+        transport, _ = (
+            await loop.create_datagram_endpoint(
+                lambda: MeshUDPProtocol(
+                    self.on_message
+                ),
+                local_addr=(
+                    self.host,
+                    self.port,
+                ),
+            )
         )
 
         self.transport = transport
 
-    def send(self, data: bytes, host: str, port: int):
-        """
-        Send a UDP datagram to another peer.
-        """
-
+    def send(
+        self,
+        data: bytes,
+        host: str,
+        port: int,
+    ):
         if self.transport is None:
             raise RuntimeError(
                 "UDP network has not been started."
@@ -64,10 +82,8 @@ class UDPNetwork:
         )
 
     def close(self):
-        """
-        Close the UDP transport.
-        """
-
         if self.transport is not None:
+
             self.transport.close()
+
             self.transport = None
