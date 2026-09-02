@@ -1,2 +1,3 @@
 cloudpickle
 pytest
+Flask>=3.0
