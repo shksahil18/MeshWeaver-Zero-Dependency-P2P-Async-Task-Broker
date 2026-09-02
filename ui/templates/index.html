@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>MeshWeaver · Operations Console</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+  </head>
+  <body>
+    <div class="app-shell">
+      <!-- Left rail -->
+      <aside class="rail" id="rail">
+        <a class="brand" href="#top" aria-label="MeshWeaver home">
+          <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+          <span class="brand-word">mesh<b>weaver</b></span>
+        </a>
+
+        <nav class="rail-nav" aria-label="Primary">
+          <p class="rail-label">Console</p>
+          <a class="rail-item active" href="#overview"><span class="rail-glyph">◉</span>Overview</a>
+          <a class="rail-item" href="#topology"><span class="rail-glyph">✷</span>Topology</a>
+          <a class="rail-item" href="#peers"><span class="rail-glyph">◇</span>Peers</a>
+          <a class="rail-item" href="#activity"><span class="rail-glyph">≈</span>Activity</a>
+          <a class="rail-item" href="#tasks"><span class="rail-glyph">▸</span>Tasks</a>
+        </nav>
+
+        <div class="rail-transport" id="rail-transport">
+          <div class="rail-transport-head">
+            <span class="beacon" id="rail-beacon" data-online="false"></span>
+            <b id="side-status">Node offline</b>
+          </div>
+          <p class="rail-transport-addr" id="side-address">No transport bound</p>
+        </div>
+
+        <p class="rail-foot">MeshWeaver <span>UDP · v0.1</span></p>
+      </aside>
+
+      <!-- Main column -->
+      <main id="top">
+        <header class="command-bar">
+          <button class="menu-button" id="menu-button" aria-label="Toggle navigation">≡</button>
+          <div class="crumbs"><span>Console</span><i>/</i><strong>node operations</strong></div>
+          <div class="command-actions">
+            <span class="link-chip" id="transport-chip" data-online="false">
+              <span class="beacon"></span><code id="chip-address">offline</code>
+            </span>
+            <button class="btn-ghost" id="open-task">Send a task</button>
+            <button class="btn-primary" id="node-control" data-online="false">Start node</button>
+          </div>
+        </header>
+
+        <div class="content">
+          <section class="hero" id="overview">
+            <p class="eyebrow" id="network-state"><span class="beacon"></span> Node offline</p>
+            <h1>Mesh operations console</h1>
+            <p class="hero-copy">Bind a local UDP node, discover peers over PING / PONG, then ship a
+              pickled function across the wire &mdash; and watch it move on the radar.</p>
+          </section>
+
+          <!-- Signature row: live radar + honest readouts -->
+          <section class="signal-row" id="topology">
+            <article class="panel radar-panel">
+              <div class="panel-head">
+                <div>
+                  <p class="kicker">Live topology</p>
+                  <h2>Mesh radar</h2>
+                </div>
+                <div class="radar-legend" aria-hidden="true">
+                  <span class="leg leg-tx"><i></i>transmit</span>
+                  <span class="leg leg-rx"><i></i>receive</span>
+                </div>
+              </div>
+              <div class="radar-stage" id="radar-stage">
+                <canvas id="mesh-radar"></canvas>
+                <div class="radar-core" id="radar-core" data-online="false">
+                  <span class="radar-core-dot"></span>
+                  <b id="radar-core-id">idle</b>
+                  <em id="radar-core-sub">no transport</em>
+                </div>
+              </div>
+              <p class="radar-caption" id="radar-caption">Start your node to open the transport, then ping a peer to bring it onto the radar.</p>
+            </article>
+
+            <div class="readout-stack">
+              <article class="readout">
+                <p class="kicker">Peers online</p>
+                <div class="readout-value" id="peer-count">00</div>
+                <p class="readout-note">discovered via PONG</p>
+                <span class="readout-spark" data-kind="rx" aria-hidden="true"></span>
+              </article>
+              <article class="readout">
+                <p class="kicker">Tasks dispatched</p>
+                <div class="readout-value" id="task-count">00</div>
+                <p class="readout-note">this session</p>
+                <span class="readout-spark" data-kind="tx" aria-hidden="true"></span>
+              </article>
+              <article class="readout">
+                <p class="kicker">Events logged</p>
+                <div class="readout-value" id="event-count">00</div>
+                <p class="readout-note">rolling window</p>
+                <span class="readout-spark" data-kind="sys" aria-hidden="true"></span>
+              </article>
+              <article class="readout transport-card">
+                <p class="kicker">Local transport</p>
+                <div class="transport-id"><span>node</span><code id="node-id">—</code></div>
+                <div class="transport-id"><span>bind</span><code id="node-address">—</code></div>
+              </article>
+            </div>
+          </section>
+
+          <!-- Peers + activity -->
+          <section class="split-row">
+            <article class="panel" id="peers">
+              <div class="panel-head">
+                <div>
+                  <p class="kicker">Reachable nodes</p>
+                  <h2>Mesh peers</h2>
+                </div>
+                <button class="btn-ghost sm" id="open-peer">Ping a peer</button>
+              </div>
+              <div class="peer-list" id="peer-list">
+                <p class="empty-state">No peers yet. Start your node, then ping one to bring it onto the mesh.</p>
+              </div>
+            </article>
+
+            <article class="panel" id="activity">
+              <div class="panel-head">
+                <div>
+                  <p class="kicker">On the wire</p>
+                  <h2>Activity stream</h2>
+                </div>
+                <button class="btn-ghost sm" id="refresh-status">Refresh</button>
+              </div>
+              <div class="activity-list" id="activity-list">
+                <p class="empty-state">Nothing on the wire yet. Node events stream in here as they happen.</p>
+              </div>
+            </article>
+          </section>
+
+          <!-- Tasks -->
+          <section class="panel tasks-panel" id="tasks">
+            <div class="panel-head">
+              <div>
+                <p class="kicker">Dispatch log</p>
+                <h2>Task runs</h2>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr><th>Operation</th><th>Target peer</th><th>Dispatched</th><th>State</th></tr>
+                </thead>
+                <tbody id="task-list">
+                  <tr><td colspan="4" class="empty-cell">No tasks dispatched this session.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      </main>
+    </div>
+
+    <!-- Modals -->
+    <div class="modal" id="node-modal" aria-hidden="true">
+      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="node-modal-title">
+        <button class="close-modal" aria-label="Close">✕</button>
+        <p class="kicker">Local transport</p>
+        <h2 id="node-modal-title">Start a node</h2>
+        <p class="modal-copy">Bind a UDP socket for this console's local node. It listens for PING, PONG and TASK datagrams.</p>
+        <form id="node-form">
+          <label>Host<input name="host" value="127.0.0.1" autocomplete="off" required></label>
+          <label>UDP port<input name="port" type="number" value="4800" min="1" max="65535" required></label>
+          <button class="btn-primary block" type="submit">Start node</button>
+        </form>
+      </div>
+    </div>
+
+    <div class="modal" id="peer-modal" aria-hidden="true">
+      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="peer-modal-title">
+        <button class="close-modal" aria-label="Close">✕</button>
+        <p class="kicker">Peer discovery</p>
+        <h2 id="peer-modal-title">Ping a peer</h2>
+        <p class="modal-copy">Send a PING. A peer that answers with PONG joins the live topology on the radar.</p>
+        <form id="peer-form">
+          <label>Peer host<input name="host" value="127.0.0.1" autocomplete="off" required></label>
+          <label>UDP port<input name="port" type="number" value="4801" min="1" max="65535" required></label>
+          <button class="btn-primary block" type="submit">Send PING</button>
+        </form>
+      </div>
+    </div>
+
+    <div class="modal" id="task-modal" aria-hidden="true">
+      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="task-modal-title">
+        <button class="close-modal" aria-label="Close">✕</button>
+        <p class="kicker">Dispatch</p>
+        <h2 id="task-modal-title">Send a task</h2>
+        <p class="modal-copy">Pick a safe, built-in operation. It's pickled, sent over UDP, and run on the peer &mdash; the result comes back as TASK_RESULT.</p>
+        <form id="task-form">
+          <label>Operation
+            <select name="operation">
+              <option value="echo">echo — return text</option>
+              <option value="add">add — sum two numbers</option>
+              <option value="multiply">multiply — product of two numbers</option>
+            </select>
+          </label>
+          <label>First value<input name="first" value="Hello from MeshWeaver" required></label>
+          <label class="second-value">Second value<input name="second" type="number" value="0"></label>
+          <div class="field-row">
+            <label>Peer host<input name="host" value="127.0.0.1" autocomplete="off" required></label>
+            <label>UDP port<input name="port" type="number" value="4801" min="1" max="65535" required></label>
+          </div>
+          <button class="btn-primary block" type="submit">Dispatch task</button>
+        </form>
+      </div>
+    </div>
+
+    <div class="toast" role="status" aria-live="polite"></div>
+    <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+  </body>
+</html>
