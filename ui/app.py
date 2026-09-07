@@ -40,12 +40,16 @@ class DashboardNode(MeshNode):
 
     def handle_pong(self, message, addr):
         super().handle_pong(message, addr)
-        self._on_event("peer", f"Heartbeat received from {message.get('node_id', 'unknown peer')}", host=addr[0], port=addr[1], node_id=message.get("node_id", "unknown"))
+        node_id_raw = message.get("node_id", "unknown")
+        node_id_str = f"{node_id_raw:040x}" if isinstance(node_id_raw, int) else str(node_id_raw)
+        self._on_event("peer", f"Heartbeat received from {node_id_str}", host=addr[0], port=addr[1], node_id=node_id_str)
 
     def handle_task_result(self, message, addr):
         super().handle_task_result(message, addr)
-        detail = f"Remote task completed: {message.get('result')!s}" if message.get("success") else f"Remote task failed: {message.get('error', 'unknown error')}"
-        self._on_event("success" if message.get("success") else "error", detail, host=addr[0], port=addr[1])
+        is_success = bool(message.get("success"))
+        result_val = message.get("result")
+        detail = f"Remote task completed: {result_val!s}" if is_success else f"Remote task failed: {message.get('error', 'unknown error')}"
+        self._on_event("success" if is_success else "error", detail, host=addr[0], port=addr[1], result=str(result_val) if is_success else None)
 
 
 class NodeController:
@@ -70,10 +74,23 @@ class NodeController:
     def _event(self, event_type, message, **extra):
         with self._lock:
             self._events.insert(0, {"type": event_type, "message": message, "time": self._timestamp(), **extra})
-            del self._events[12:]
+            del self._events[20:]
             if event_type == "peer" and extra.get("host"):
                 key = f"{extra['host']}:{extra['port']}"
-                self._peers[key] = {"name": extra.get("node_id", "unknown peer"), "host": extra["host"], "port": extra["port"], "status": "Online"}
+                self._peers[key] = {
+                    "name": str(extra.get("node_id", "unknown peer")),
+                    "host": str(extra["host"]),
+                    "port": int(extra["port"]),
+                    "status": "Online"
+                }
+            elif event_type in ("success", "error") and extra.get("host"):
+                target = f"{extra['host']}:{extra['port']}"
+                for task in self._tasks:
+                    if task.get("target") == target and task.get("status") == "Dispatched":
+                        task["status"] = "Completed" if event_type == "success" else "Failed"
+                        if "result" in extra and extra["result"] is not None:
+                            task["result"] = extra["result"]
+                        break
 
     def _run(self, coroutine):
         return asyncio.run_coroutine_threadsafe(coroutine, self._loop).result(timeout=6)
@@ -122,16 +139,34 @@ class NodeController:
             raise ValueError("Unknown task operation.")
         args = (first,) if operation == "echo" else (first, second)
         self._loop.call_soon_threadsafe(node.send_task, TASKS[operation], args, None, host, port)
-        task = {"name": operation, "target": f"{host}:{port}", "time": self._timestamp(), "status": "Dispatched"}
+        args_display = f"'{first}'" if operation == "echo" else f"{first}, {second}"
+        task = {
+            "name": operation,
+            "args": args_display,
+            "target": f"{host}:{port}",
+            "time": self._timestamp(),
+            "status": "Dispatched",
+            "result": None
+        }
         with self._lock:
             self._tasks.insert(0, task)
-            del self._tasks[8:]
+            del self._tasks[12:]
         self._event("send", f"{operation} task dispatched to {host}:{port}")
 
     def snapshot(self):
         with self._lock:
             node = self._node
-            return {"running": node is not None, "node_id": node.node_id if node else None, "address": f"{node.host}:{node.port}" if node else None, "peers": list(self._peers.values()), "events": list(self._events), "tasks": list(self._tasks)}
+            node_id_val = None
+            if node is not None:
+                node_id_val = getattr(node, "node_id_hex", None) or (f"{node.node_id:040x}" if isinstance(node.node_id, int) else str(node.node_id))
+            return {
+                "running": node is not None,
+                "node_id": node_id_val,
+                "address": f"{node.host}:{node.port}" if node else None,
+                "peers": list(self._peers.values()),
+                "events": list(self._events),
+                "tasks": list(self._tasks),
+            }
 
 
 def request_value(payload, name, default=None):
