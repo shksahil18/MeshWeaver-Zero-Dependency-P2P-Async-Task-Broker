@@ -384,6 +384,9 @@
         const statusStr = String(t.status || 'Dispatched');
         const isCompleted = statusStr.toLowerCase() === 'completed';
         const isFailed = statusStr.toLowerCase() === 'failed';
+        const resultDisplay = (t.result !== undefined && t.result !== null)
+          ? `<strong style="color: var(--color-emerald); font-family: var(--font-mono); font-size: 12px;">➔ ${esc(t.result)}</strong>`
+          : `<span style="color: var(--color-cyan); font-size: 11px;">${esc(t.args ? `args(${t.args})` : `op='${t.name}'`)}</span>`;
         return `
         <tr>
           <td>
@@ -394,7 +397,7 @@
           </td>
           <td><code>${esc(t.target)}</code></td>
           <td>${esc(t.time)}</td>
-          <td><code style="color: var(--color-cyan); font-size: 11px;">pickle(op='${esc(t.name)}')</code></td>
+          <td>${resultDisplay}</td>
           <td>
             <span class="status-glow-pill ${isCompleted ? 'completed' : (isFailed ? 'failed' : '')}">${esc(statusStr)}</span>
           </td>
