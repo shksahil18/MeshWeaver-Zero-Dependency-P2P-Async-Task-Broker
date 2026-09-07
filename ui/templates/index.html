@@ -3,158 +3,385 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>MeshWeaver · Operations Console</title>
+    <title>MeshWeaver · Next-Gen P2P Mesh Operations Console</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
   </head>
   <body>
-    <div class="app-shell">
-      <!-- Left rail -->
-      <aside class="rail" id="rail">
-        <a class="brand" href="#top" aria-label="MeshWeaver home">
-          <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
-          <span class="brand-word">mesh<b>weaver</b></span>
-        </a>
+    <!-- Ambient Background Glows -->
+    <div class="ambient-glow glow-1" aria-hidden="true"></div>
+    <div class="ambient-glow glow-2" aria-hidden="true"></div>
+    <div class="ambient-glow glow-3" aria-hidden="true"></div>
 
-        <nav class="rail-nav" aria-label="Primary">
-          <p class="rail-label">Console</p>
-          <a class="rail-item active" href="#overview"><span class="rail-glyph">◉</span>Overview</a>
-          <a class="rail-item" href="#topology"><span class="rail-glyph">✷</span>Topology</a>
-          <a class="rail-item" href="#peers"><span class="rail-glyph">◇</span>Peers</a>
-          <a class="rail-item" href="#activity"><span class="rail-glyph">≈</span>Activity</a>
-          <a class="rail-item" href="#tasks"><span class="rail-glyph">▸</span>Tasks</a>
-        </nav>
-
-        <div class="rail-transport" id="rail-transport">
-          <div class="rail-transport-head">
-            <span class="beacon" id="rail-beacon" data-online="false"></span>
-            <b id="side-status">Node offline</b>
-          </div>
-          <p class="rail-transport-addr" id="side-address">No transport bound</p>
+    <div class="app-layout">
+      <!-- Sidebar Navigation -->
+      <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+          <a class="brand" href="#overview" aria-label="MeshWeaver Home">
+            <div class="brand-badge">
+              <span class="brand-cube"><i></i><i></i><i></i><i></i></span>
+            </div>
+            <div class="brand-text">
+              <span class="brand-title">mesh<b>weaver</b></span>
+              <span class="brand-version">UDP · v0.2 PRO</span>
+            </div>
+          </a>
         </div>
 
-        <p class="rail-foot">MeshWeaver <span>UDP · v0.1</span></p>
+        <nav class="nav-menu" aria-label="Primary Navigation">
+          <div class="nav-group">
+            <p class="nav-label">Operations</p>
+            <a class="nav-link active" href="#overview">
+              <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/></svg>
+              <span>Overview</span>
+              <span class="nav-pill">Live</span>
+            </a>
+            <a class="nav-link" href="#topology">
+              <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/><path d="M12 3v6M12 15v6M3 12h6M15 12h6"/></svg>
+              <span>Radar Topology</span>
+            </a>
+            <a class="nav-link" href="#peers">
+              <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              <span>Peer Hub</span>
+              <span class="nav-counter" id="side-peer-count">0</span>
+            </a>
+            <a class="nav-link" href="#activity">
+              <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+              <span>Wire Stream</span>
+            </a>
+            <a class="nav-link" href="#tasks">
+              <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              <span>Task Engine</span>
+            </a>
+          </div>
+        </nav>
+
+        <!-- Sidebar Node Transport Status Card -->
+        <div class="sidebar-status-box" id="sidebar-node-card" data-online="false">
+          <div class="status-box-header">
+            <div class="status-indicator">
+              <span class="pulse-dot"></span>
+              <span class="status-title" id="side-status-text">Node Offline</span>
+            </div>
+            <span class="protocol-badge">UDP</span>
+          </div>
+          <p class="status-box-address" id="side-address-text">No active socket bound</p>
+          <div class="status-box-actions">
+            <button class="btn-sidebar-action" data-node-control data-online="false">
+              <span>Start Node</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="sidebar-footer">
+          <div class="shortcut-tip">
+            <kbd>Ctrl</kbd> + <kbd>K</kbd> <span>Command Menu</span>
+          </div>
+        </div>
       </aside>
 
-      <!-- Main column -->
-      <main id="top">
-        <header class="command-bar">
-          <button class="menu-button" id="menu-button" aria-label="Toggle navigation">≡</button>
-          <div class="crumbs"><span>Console</span><i>/</i><strong>node operations</strong></div>
-          <div class="command-actions">
-            <span class="link-chip" id="transport-chip" data-online="false">
-              <span class="beacon"></span><code id="chip-address">offline</code>
-            </span>
-            <button class="btn-ghost" id="open-task">Send a task</button>
-            <button class="btn-primary" id="node-control" data-online="false">Start node</button>
+      <!-- Main Dashboard Content -->
+      <main class="main-viewport">
+        <!-- Top Command & Header Bar -->
+        <header class="topbar">
+          <div class="topbar-left">
+            <button class="mobile-menu-btn" id="mobile-menu-btn" aria-label="Toggle Menu">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+            </button>
+            <div class="breadcrumb">
+              <span class="bc-root">MeshWeaver</span>
+              <span class="bc-sep">/</span>
+              <span class="bc-current">Operations Command</span>
+            </div>
+            <div class="network-badge" id="header-status-pill" data-online="false">
+              <span class="badge-dot"></span>
+              <span class="badge-label" id="header-status-label">SOCKET DISCONNECTED</span>
+            </div>
+          </div>
+
+          <div class="topbar-actions">
+            <button class="search-trigger" id="cmd-palette-trigger" title="Quick Actions (Ctrl+K)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <span>Command Menu...</span>
+              <kbd>⌘K</kbd>
+            </button>
+            <button class="btn-action btn-outline" id="header-ping-btn" data-open-peer data-requires-node>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+              <span>Ping Peer</span>
+            </button>
+            <button class="btn-action btn-secondary" id="header-task-btn" data-open-task data-requires-node>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+              <span>Dispatch Task</span>
+            </button>
+            <button class="btn-action btn-glow" data-node-control data-online="false">
+              <svg class="node-state-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>
+              <span class="node-control-text">Start Node</span>
+            </button>
           </div>
         </header>
 
-        <div class="content">
-          <section class="hero" id="overview">
-            <p class="eyebrow" id="network-state"><span class="beacon"></span> Node offline</p>
-            <h1>Mesh operations console</h1>
-            <p class="hero-copy">Bind a local UDP node, discover peers over PING / PONG, then ship a
-              pickled function across the wire &mdash; and watch it move on the radar.</p>
+        <!-- Main Body Grid Container -->
+        <div class="dashboard-scroll">
+          <!-- Welcome Hero Section -->
+          <section class="hero-strip" id="overview">
+            <div class="hero-content">
+              <div class="hero-tag">
+                <span class="sparkle-icon">✨</span> Zero-Dependency Asynchronous P2P Mesh
+              </div>
+              <h1 class="hero-heading">Decentralized Mesh Operations</h1>
+              <p class="hero-subtext">Discover UDP peers via gossiped heartbeats, monitor live orbital topology, and dispatch serialized Python workloads across the wire.</p>
+            </div>
+            <div class="hero-stats-quick">
+              <div class="quick-chip">
+                <span class="chip-label">Transport</span>
+                <span class="chip-val">UDP Datagram</span>
+              </div>
+              <div class="quick-chip">
+                <span class="chip-label">Serialization</span>
+                <span class="chip-val">Pickle Protocol v4</span>
+              </div>
+              <div class="quick-chip">
+                <span class="chip-label">Discovery</span>
+                <span class="chip-val">PING / PONG Mesh</span>
+              </div>
+            </div>
           </section>
 
-          <!-- Signature row: live radar + honest readouts -->
-          <section class="signal-row" id="topology">
-            <article class="panel radar-panel">
-              <div class="panel-head">
-                <div>
-                  <p class="kicker">Live topology</p>
-                  <h2>Mesh radar</h2>
+          <!-- Bento Grid Level 1: Radar & Telemetry Cards -->
+          <section class="bento-grid" id="topology">
+            <!-- Main Radar Visualization Panel (Span 8) -->
+            <article class="bento-card bento-radar">
+              <div class="card-header">
+                <div class="header-titles">
+                  <span class="kicker-tag">LIVE TOPOLOGY MATRIX</span>
+                  <h2 class="card-title">Orbital Mesh Radar</h2>
                 </div>
-                <div class="radar-legend" aria-hidden="true">
-                  <span class="leg leg-tx"><i></i>transmit</span>
-                  <span class="leg leg-rx"><i></i>receive</span>
+                <div class="radar-hud-legend">
+                  <div class="legend-item leg-tx"><span class="leg-pill"></span> Outbound (TX)</div>
+                  <div class="legend-item leg-rx"><span class="leg-pill"></span> Inbound (RX)</div>
+                  <div class="legend-item leg-peer"><span class="leg-pill"></span> Live Peer</div>
                 </div>
               </div>
-              <div class="radar-stage" id="radar-stage">
+
+              <!-- Interactive Radar Visual Canvas -->
+              <div class="radar-container" id="radar-stage">
                 <canvas id="mesh-radar"></canvas>
-                <div class="radar-core" id="radar-core" data-online="false">
-                  <span class="radar-core-dot"></span>
-                  <b id="radar-core-id">idle</b>
-                  <em id="radar-core-sub">no transport</em>
+                
+                <!-- Central Node Hub -->
+                <div class="radar-center-hub" id="radar-core" data-online="false">
+                  <div class="center-pulse-ring"></div>
+                  <div class="center-pulse-ring delay-1"></div>
+                  <div class="center-orb">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                  </div>
+                  <div class="center-labels">
+                    <span class="center-name" id="radar-core-id">LOCAL NODE</span>
+                    <span class="center-status" id="radar-core-sub">SOCKET UNBOUND</span>
+                  </div>
                 </div>
               </div>
-              <p class="radar-caption" id="radar-caption">Start your node to open the transport, then ping a peer to bring it onto the radar.</p>
+
+              <!-- Radar Footer HUD Banner -->
+              <div class="radar-hud-footer">
+                <div class="hud-status-line">
+                  <span class="hud-terminal-prompt">&gt;</span>
+                  <span class="hud-message" id="radar-caption">Transport offline. Launch node to initialize mesh topology.</span>
+                </div>
+                <div class="hud-quick-actions">
+                  <button class="btn-micro" id="quick-preset-ping" data-open-peer data-requires-node>+ Add Peer</button>
+                  <button class="btn-micro" id="quick-preset-task" data-open-task data-requires-node>⚡ Run Workload</button>
+                </div>
+              </div>
             </article>
 
-            <div class="readout-stack">
-              <article class="readout">
-                <p class="kicker">Peers online</p>
-                <div class="readout-value" id="peer-count">00</div>
-                <p class="readout-note">discovered via PONG</p>
-                <span class="readout-spark" data-kind="rx" aria-hidden="true"></span>
+            <!-- Telemetry Bento Sidebar (Span 4) -->
+            <div class="bento-telemetry-col">
+              <!-- Metric 1: Peers Online -->
+              <article class="bento-card stat-card">
+                <div class="stat-header">
+                  <div class="stat-icon-wrap icon-cyan">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+                  </div>
+                  <div class="stat-kicker">ACTIVE PEERS</div>
+                  <span class="trend-badge trend-up" id="peer-trend">Mesh Active</span>
+                </div>
+                <div class="stat-body">
+                  <div class="stat-main-value" id="peer-count">00</div>
+                  <div class="stat-sparkline" id="spark-peers">
+                    <svg viewBox="0 0 100 30" class="spark-svg"><path d="M0,25 Q25,20 50,15 T100,5" fill="none" stroke="currentColor" stroke-width="2.5"/></svg>
+                  </div>
+                </div>
+                <div class="stat-footer">
+                  <span>Discovered over PONG response</span>
+                </div>
               </article>
-              <article class="readout">
-                <p class="kicker">Tasks dispatched</p>
-                <div class="readout-value" id="task-count">00</div>
-                <p class="readout-note">this session</p>
-                <span class="readout-spark" data-kind="tx" aria-hidden="true"></span>
+
+              <!-- Metric 2: Tasks Dispatched -->
+              <article class="bento-card stat-card">
+                <div class="stat-header">
+                  <div class="stat-icon-wrap icon-amber">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                  </div>
+                  <div class="stat-kicker">TASKS DISPATCHED</div>
+                  <span class="trend-badge" id="task-rate">0 / min</span>
+                </div>
+                <div class="stat-body">
+                  <div class="stat-main-value" id="task-count">00</div>
+                  <div class="stat-sparkline spark-amber" id="spark-tasks">
+                    <svg viewBox="0 0 100 30" class="spark-svg"><path d="M0,20 Q30,10 60,22 T100,8" fill="none" stroke="currentColor" stroke-width="2.5"/></svg>
+                  </div>
+                </div>
+                <div class="stat-footer">
+                  <span>Async remote executions</span>
+                </div>
               </article>
-              <article class="readout">
-                <p class="kicker">Events logged</p>
-                <div class="readout-value" id="event-count">00</div>
-                <p class="readout-note">rolling window</p>
-                <span class="readout-spark" data-kind="sys" aria-hidden="true"></span>
+
+              <!-- Metric 3: Events Logged -->
+              <article class="bento-card stat-card">
+                <div class="stat-header">
+                  <div class="stat-icon-wrap icon-purple">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                  </div>
+                  <div class="stat-kicker">WIRE ACTIVITY</div>
+                  <span class="trend-badge" id="event-rate">Live stream</span>
+                </div>
+                <div class="stat-body">
+                  <div class="stat-main-value" id="event-count">00</div>
+                  <div class="stat-sparkline spark-purple" id="spark-events">
+                    <svg viewBox="0 0 100 30" class="spark-svg"><path d="M0,15 Q35,28 70,5 T100,18" fill="none" stroke="currentColor" stroke-width="2.5"/></svg>
+                  </div>
+                </div>
+                <div class="stat-footer">
+                  <span>Rolling datagram buffer</span>
+                </div>
               </article>
-              <article class="readout transport-card">
-                <p class="kicker">Local transport</p>
-                <div class="transport-id"><span>node</span><code id="node-id">—</code></div>
-                <div class="transport-id"><span>bind</span><code id="node-address">—</code></div>
+
+              <!-- Local Node Transport Card -->
+              <article class="bento-card transport-spec-card">
+                <div class="transport-header">
+                  <span class="kicker-tag">NODE SPECIFICATION</span>
+                  <span class="online-pill" id="transport-online-badge">OFFLINE</span>
+                </div>
+                <div class="transport-grid">
+                  <div class="spec-row">
+                    <span class="spec-name">Node ID</span>
+                    <div class="spec-value-copy">
+                      <code id="node-id">—</code>
+                      <button class="btn-copy" id="btn-copy-id" title="Copy Node ID" disabled>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                      </button>
+                    </div>
+                  </div>
+                  <div class="spec-row">
+                    <span class="spec-name">Bound Address</span>
+                    <div class="spec-value-copy">
+                      <code id="node-address">—</code>
+                      <button class="btn-copy" id="btn-copy-addr" title="Copy Address" disabled>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </article>
             </div>
           </section>
 
-          <!-- Peers + activity -->
-          <section class="split-row">
-            <article class="panel" id="peers">
-              <div class="panel-head">
-                <div>
-                  <p class="kicker">Reachable nodes</p>
-                  <h2>Mesh peers</h2>
+          <!-- Bento Grid Level 2: Peer Hub & Wire Activity Stream -->
+          <section class="split-grid">
+            <!-- Reachable Peers Hub (Left) -->
+            <article class="bento-card peers-panel" id="peers">
+              <div class="card-header">
+                <div class="header-titles">
+                  <span class="kicker-tag">CONNECTED TOPOLOGY</span>
+                  <h2 class="card-title">Reachable Mesh Peers</h2>
                 </div>
-                <button class="btn-ghost sm" id="open-peer">Ping a peer</button>
+                <div class="card-controls">
+                  <button class="btn-action btn-outline btn-sm" data-open-peer data-requires-node>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    <span>Ping New Peer</span>
+                  </button>
+                </div>
               </div>
-              <div class="peer-list" id="peer-list">
-                <p class="empty-state">No peers yet. Start your node, then ping one to bring it onto the mesh.</p>
+              <div class="peer-grid-container" id="peer-list">
+                <div class="empty-state-box">
+                  <div class="empty-icon-halo">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+                  </div>
+                  <h3>No Peers Discovered Yet</h3>
+                  <p>Start your node and send a UDP PING to bring neighbouring nodes onto the mesh radar.</p>
+                  <button class="btn-action btn-secondary btn-sm" data-open-peer data-requires-node>Ping 127.0.0.1:4801</button>
+                </div>
               </div>
             </article>
 
-            <article class="panel" id="activity">
-              <div class="panel-head">
-                <div>
-                  <p class="kicker">On the wire</p>
-                  <h2>Activity stream</h2>
+            <!-- Real-time Activity Stream (Right) -->
+            <article class="bento-card activity-panel" id="activity">
+              <div class="card-header">
+                <div class="header-titles">
+                  <span class="kicker-tag">REAL-TIME TELEMETRY</span>
+                  <h2 class="card-title">Wire Activity Stream</h2>
                 </div>
-                <button class="btn-ghost sm" id="refresh-status">Refresh</button>
+                <div class="card-controls">
+                  <div class="filter-pills" id="activity-filters">
+                    <button class="pill-btn active" data-filter="all">All</button>
+                    <button class="pill-btn" data-filter="send">TX</button>
+                    <button class="pill-btn" data-filter="peer">RX</button>
+                    <button class="pill-btn" data-filter="tasks">Tasks</button>
+                  </div>
+                  <button class="btn-icon" id="refresh-status" title="Refresh State">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                  </button>
+                </div>
               </div>
-              <div class="activity-list" id="activity-list">
-                <p class="empty-state">Nothing on the wire yet. Node events stream in here as they happen.</p>
+              <div class="activity-stream-wrap" id="activity-list">
+                <div class="empty-state-box">
+                  <div class="empty-icon-halo">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                  </div>
+                  <h3>No Activity On The Wire</h3>
+                  <p>Datagram events, heartbeats, and task completions will stream here in real time.</p>
+                </div>
               </div>
             </article>
           </section>
 
-          <!-- Tasks -->
-          <section class="panel tasks-panel" id="tasks">
-            <div class="panel-head">
-              <div>
-                <p class="kicker">Dispatch log</p>
-                <h2>Task runs</h2>
+          <!-- Bento Grid Level 3: Task Runs & Dispatch History Table -->
+          <section class="bento-card task-history-card" id="tasks">
+            <div class="card-header">
+              <div class="header-titles">
+                <span class="kicker-tag">EXECUTION LOGS</span>
+                <h2 class="card-title">Task Engine Dispatches</h2>
+              </div>
+              <div class="card-controls">
+                <button class="btn-action btn-secondary btn-sm" data-open-task data-requires-node>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                  <span>New Workload</span>
+                </button>
               </div>
             </div>
-            <div class="table-wrap">
-              <table>
+
+            <div class="table-container">
+              <table class="modern-table">
                 <thead>
-                  <tr><th>Operation</th><th>Target peer</th><th>Dispatched</th><th>State</th></tr>
+                  <tr>
+                    <th>Workload Operation</th>
+                    <th>Target Node</th>
+                    <th>Dispatched Time</th>
+                    <th>Payload Signature</th>
+                    <th>Execution Status</th>
+                  </tr>
                 </thead>
                 <tbody id="task-list">
-                  <tr><td colspan="4" class="empty-cell">No tasks dispatched this session.</td></tr>
+                  <tr>
+                    <td colspan="5" class="table-empty">
+                      <div class="empty-table-prompt">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                        <span>No workloads executed this session. Dispatch an echo, add, or multiply task.</span>
+                      </div>
+                    </td>
+                  </tr>
                 </tbody>
               </table>
             </div>
@@ -163,61 +390,203 @@
       </main>
     </div>
 
-    <!-- Modals -->
-    <div class="modal" id="node-modal" aria-hidden="true">
-      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="node-modal-title">
-        <button class="close-modal" aria-label="Close">✕</button>
-        <p class="kicker">Local transport</p>
-        <h2 id="node-modal-title">Start a node</h2>
-        <p class="modal-copy">Bind a UDP socket for this console's local node. It listens for PING, PONG and TASK datagrams.</p>
-        <form id="node-form">
-          <label>Host<input name="host" value="127.0.0.1" autocomplete="off" required></label>
-          <label>UDP port<input name="port" type="number" value="4800" min="1" max="65535" required></label>
-          <button class="btn-primary block" type="submit">Start node</button>
-        </form>
-      </div>
-    </div>
+    <!-- ==================== MODALS ==================== -->
 
-    <div class="modal" id="peer-modal" aria-hidden="true">
-      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="peer-modal-title">
-        <button class="close-modal" aria-label="Close">✕</button>
-        <p class="kicker">Peer discovery</p>
-        <h2 id="peer-modal-title">Ping a peer</h2>
-        <p class="modal-copy">Send a PING. A peer that answers with PONG joins the live topology on the radar.</p>
-        <form id="peer-form">
-          <label>Peer host<input name="host" value="127.0.0.1" autocomplete="off" required></label>
-          <label>UDP port<input name="port" type="number" value="4801" min="1" max="65535" required></label>
-          <button class="btn-primary block" type="submit">Send PING</button>
-        </form>
-      </div>
-    </div>
-
-    <div class="modal" id="task-modal" aria-hidden="true">
-      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="task-modal-title">
-        <button class="close-modal" aria-label="Close">✕</button>
-        <p class="kicker">Dispatch</p>
-        <h2 id="task-modal-title">Send a task</h2>
-        <p class="modal-copy">Pick a safe, built-in operation. It's pickled, sent over UDP, and run on the peer &mdash; the result comes back as TASK_RESULT.</p>
-        <form id="task-form">
-          <label>Operation
-            <select name="operation">
-              <option value="echo">echo — return text</option>
-              <option value="add">add — sum two numbers</option>
-              <option value="multiply">multiply — product of two numbers</option>
-            </select>
-          </label>
-          <label>First value<input name="first" value="Hello from MeshWeaver" required></label>
-          <label class="second-value">Second value<input name="second" type="number" value="0"></label>
-          <div class="field-row">
-            <label>Peer host<input name="host" value="127.0.0.1" autocomplete="off" required></label>
-            <label>UDP port<input name="port" type="number" value="4801" min="1" max="65535" required></label>
+    <!-- Modal 1: Start Local Node -->
+    <div class="modal-backdrop" id="node-modal" aria-hidden="true">
+      <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="node-modal-title">
+        <div class="modal-header">
+          <div class="modal-badge">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>
           </div>
-          <button class="btn-primary block" type="submit">Dispatch task</button>
+          <div>
+            <span class="kicker-tag">TRANSPORT INITIALIZATION</span>
+            <h2 id="node-modal-title" class="modal-title">Start Local Mesh Node</h2>
+          </div>
+          <button class="modal-close" aria-label="Close modal">✕</button>
+        </div>
+        <p class="modal-intro">Bind a local asynchronous UDP socket to listen for incoming PINGs, heartbeats, and compute tasks.</p>
+        
+        <form id="node-form" class="modal-form">
+          <div class="form-group">
+            <label for="node-host">Host Interface</label>
+            <input id="node-host" name="host" class="form-input" value="127.0.0.1" autocomplete="off" required>
+            <span class="form-hint">Use 127.0.0.1 for local testing or 0.0.0.0 for LAN discovery</span>
+          </div>
+          
+          <div class="form-group">
+            <label for="node-port">UDP Bind Port</label>
+            <input id="node-port" name="port" type="number" class="form-input" value="4800" min="1" max="65535" required>
+            <div class="port-chips">
+              <button type="button" class="chip-btn" data-set-port="4800">4800 (Default)</button>
+              <button type="button" class="chip-btn" data-set-port="9001">9001</button>
+              <button type="button" class="chip-btn" data-set-port="9002">9002</button>
+            </div>
+          </div>
+
+          <div class="modal-footer">
+            <button type="button" class="btn-action btn-outline modal-cancel">Cancel</button>
+            <button type="submit" class="btn-action btn-glow">Initialize Node</button>
+          </div>
         </form>
       </div>
     </div>
 
-    <div class="toast" role="status" aria-live="polite"></div>
+    <!-- Modal 2: Ping Peer Discovery -->
+    <div class="modal-backdrop" id="peer-modal" aria-hidden="true">
+      <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="peer-modal-title">
+        <div class="modal-header">
+          <div class="modal-badge icon-cyan">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+          </div>
+          <div>
+            <span class="kicker-tag">PEER DISCOVERY</span>
+            <h2 id="peer-modal-title" class="modal-title">Ping a Remote Peer</h2>
+          </div>
+          <button class="modal-close" aria-label="Close modal">✕</button>
+        </div>
+        <p class="modal-intro">Send a lightweight UDP PING packet. When the peer replies with PONG, it is linked onto your topology radar.</p>
+        
+        <form id="peer-form" class="modal-form">
+          <div class="form-group">
+            <label for="peer-host">Remote Host</label>
+            <input id="peer-host" name="host" class="form-input" value="127.0.0.1" autocomplete="off" required>
+          </div>
+          
+          <div class="form-group">
+            <label for="peer-port">Remote UDP Port</label>
+            <input id="peer-port" name="port" type="number" class="form-input" value="4801" min="1" max="65535" required>
+            <div class="port-chips">
+              <button type="button" class="chip-btn" data-set-peer="127.0.0.1:4801">Node :4801</button>
+              <button type="button" class="chip-btn" data-set-peer="127.0.0.1:9001">Node :9001</button>
+              <button type="button" class="chip-btn" data-set-peer="127.0.0.1:9002">Node :9002</button>
+            </div>
+          </div>
+
+          <div class="modal-footer">
+            <button type="button" class="btn-action btn-outline modal-cancel">Cancel</button>
+            <button type="submit" class="btn-action btn-cyan">Transmit PING</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Modal 3: Dispatch Task Workload -->
+    <div class="modal-backdrop" id="task-modal" aria-hidden="true">
+      <div class="modal-box modal-lg" role="dialog" aria-modal="true" aria-labelledby="task-modal-title">
+        <div class="modal-header">
+          <div class="modal-badge icon-amber">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+          </div>
+          <div>
+            <span class="kicker-tag">WORKLOAD DISPATCH</span>
+            <h2 id="task-modal-title" class="modal-title">Dispatch Task to Mesh</h2>
+          </div>
+          <button class="modal-close" aria-label="Close modal">✕</button>
+        </div>
+        <p class="modal-intro">Package a safe Python callable with arguments, serialize it via Pickle protocol, and dispatch it across UDP to execute remotely.</p>
+        
+        <form id="task-form" class="modal-form">
+          <div class="form-group">
+            <label for="task-op">Callable Operation</label>
+            <select id="task-op" name="operation" class="form-select">
+              <option value="echo">echo(text) — Return echo string payload</option>
+              <option value="add">add(a, b) — Calculate arithmetic sum</option>
+              <option value="multiply">multiply(a, b) — Calculate mathematical product</option>
+            </select>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label id="label-first" for="task-first">First Value / Argument</label>
+              <input id="task-first" name="first" class="form-input" value="Hello MeshWeaver 🚀" required>
+            </div>
+            
+            <div class="form-group flex-1 second-value-group" id="second-val-box" style="display:none;">
+              <label id="label-second" for="task-second">Second Value (Number)</label>
+              <input id="task-second" name="second" type="number" class="form-input" value="10">
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label for="task-host">Target Peer Host</label>
+              <input id="task-host" name="host" class="form-input" value="127.0.0.1" autocomplete="off" required>
+            </div>
+            <div class="form-group flex-1">
+              <label for="task-port">Target UDP Port</label>
+              <input id="task-port" name="port" type="number" class="form-input" value="4801" min="1" max="65535" required>
+            </div>
+          </div>
+
+          <div class="payload-preview-box">
+            <span class="preview-tag">PAYLOAD PREVIEW</span>
+            <code id="task-preview-code">meshweaver.dispatch(echo, args=('Hello MeshWeaver 🚀',), dest='127.0.0.1:4801')</code>
+          </div>
+
+          <div class="modal-footer">
+            <button type="button" class="btn-action btn-outline modal-cancel">Cancel</button>
+            <button type="submit" class="btn-action btn-amber">Dispatch Datagram</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Modal 4: Command Palette (Ctrl+K) -->
+    <div class="modal-backdrop" id="cmd-modal" aria-hidden="true">
+      <div class="cmd-palette-box">
+        <div class="cmd-search-header">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" id="cmd-input" placeholder="Type a command or shortcut (e.g. 'start', 'ping', 'task')..." autocomplete="off">
+          <kbd class="esc-kbd">ESC</kbd>
+        </div>
+        <div class="cmd-list" id="cmd-options">
+          <div class="cmd-item" data-action="toggle-node">
+            <div class="cmd-item-icon icon-glow">⚡</div>
+            <div class="cmd-item-text">
+              <strong>Start / Stop Local Node</strong>
+              <span>Toggle UDP socket listener</span>
+            </div>
+            <kbd>N</kbd>
+          </div>
+          <div class="cmd-item" data-action="open-ping">
+            <div class="cmd-item-icon icon-cyan">📡</div>
+            <div class="cmd-item-text">
+              <strong>Ping a Peer</strong>
+              <span>Send discovery heartbeat over UDP</span>
+            </div>
+            <kbd>P</kbd>
+          </div>
+          <div class="cmd-item" data-action="open-task">
+            <div class="cmd-item-icon icon-amber">🚀</div>
+            <div class="cmd-item-text">
+              <strong>Dispatch Task Workload</strong>
+              <span>Run safe serialized Python callable</span>
+            </div>
+            <kbd>T</kbd>
+          </div>
+          <div class="cmd-item" data-action="refresh">
+            <div class="cmd-item-icon icon-purple">🔄</div>
+            <div class="cmd-item-text">
+              <strong>Refresh Telemetry Snapshot</strong>
+              <span>Poll latest node & wire state</span>
+            </div>
+            <kbd>R</kbd>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Global Floating Toast Notification -->
+    <div class="toast-container" id="toast" role="status" aria-live="polite">
+      <div class="toast-icon">✓</div>
+      <div class="toast-content">
+        <strong class="toast-title">Notification</strong>
+        <p class="toast-msg">Operation completed successfully.</p>
+      </div>
+    </div>
+
     <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
   </body>
 </html>
+
