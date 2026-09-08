@@ -1,4 +1,5 @@
 import asyncio
+import time
 from datetime import datetime, timezone
 
 
@@ -178,6 +179,7 @@ class GossipEngine:
                 "memory_percent": memory,
                 "timestamp": timestamp,
                 "address": sender_address,
+                "received_at": time.monotonic(),
             }
 
             print(
