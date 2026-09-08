@@ -1036,6 +1036,35 @@ kbd {
   gap: 3px;
 }
 
+.telemetry-spec-row {
+  padding-top: 2px;
+}
+
+.spec-telemetry {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-cyan);
+}
+
+.security-state {
+  align-self: flex-start;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  padding: 2px 7px;
+  border-radius: 10px;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.security-state[data-enabled="true"] {
+  color: var(--color-emerald);
+  background: rgba(16, 185, 129, 0.12);
+  border-color: rgba(16, 185, 129, 0.3);
+}
+
 .spec-name {
   font-size: 11px;
   color: var(--text-muted);
@@ -1171,6 +1200,30 @@ kbd {
   color: var(--text-muted);
 }
 
+.peer-telemetry {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  margin-top: 4px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.peer-telemetry b {
+  color: var(--text-dim);
+  font-weight: 600;
+}
+
+.peer-heartbeat {
+  color: var(--color-emerald);
+}
+
+.peer-heartbeat.offline {
+  color: var(--color-rose);
+}
+
 .peer-actions-row {
   display: flex;
   align-items: center;
@@ -1201,6 +1254,11 @@ kbd {
   border-radius: 10px;
   background: rgba(16, 185, 129, 0.15);
   color: var(--color-emerald);
+}
+
+.peer-online-tag.offline {
+  background: rgba(244, 63, 94, 0.15);
+  color: var(--color-rose);
 }
 
 /* Activity Panel */
@@ -1460,6 +1518,49 @@ kbd {
   background: rgba(16, 185, 129, 0.15);
   color: var(--color-emerald);
   border-color: rgba(16, 185, 129, 0.3);
+}
+
+.status-glow-pill.failed {
+  background: rgba(244, 63, 94, 0.15);
+  color: var(--color-rose);
+  border-color: rgba(244, 63, 94, 0.3);
+}
+
+.task-route-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 170px;
+}
+
+.task-result-line {
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.task-route-line {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+
+.task-history {
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.task-history summary {
+  cursor: pointer;
+  color: var(--color-purple);
+  font-family: var(--font-mono);
+}
+
+.task-history-list {
+  margin: 5px 0 0 14px;
+  padding: 0;
+  color: var(--text-muted);
+  line-height: 1.45;
 }
 
 .table-empty {
@@ -1853,4 +1954,3 @@ kbd {
     display: none;
   }
 }
-
