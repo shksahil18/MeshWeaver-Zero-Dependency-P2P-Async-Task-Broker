@@ -1,3 +1,13 @@
+"""
+MeshWeaver – peer node.
+
+Weeks 1-4 integrated:
+    Week 1  Async UDP networking + task serialization
+    Week 2  Kademlia DHT + gossip CPU/RAM exchange
+    Week 3  Least-loaded task routing + heartbeat fault tolerance
+    Week 4  HMAC-SHA256 message signing + verification
+"""
+
 import asyncio
 import uuid
 
@@ -9,6 +19,10 @@ from meshweaver.dht import (
 
 from meshweaver.gossip import (
     GossipEngine,
+)
+
+from meshweaver.heartbeat import (
+    HeartbeatMonitor,
 )
 
 from meshweaver.metrics import (
@@ -24,13 +38,25 @@ from meshweaver.protocol import (
     decode_message,
 )
 
+from meshweaver.router import (
+    NoAvailableNodeError,
+    TaskRouter,
+)
+
 from meshweaver.tasks.serializer import (
     serialize_task,
     deserialize_task,
 )
 
+from meshweaver.tasks.tracker import (
+    TaskStatus,
+    TaskTracker,
+    TaskFailedError,
+)
+
 
 RPC_TIMEOUT = 3
+TASK_TIMEOUT = 30     # seconds before a dispatched task is retried
 
 
 class MeshNode:
@@ -45,15 +71,24 @@ class MeshNode:
         - Cloudpickle task serialization
         - Remote task execution
         - TASK_RESULT responses
+        - Least-loaded task routing            (Week 3)
+        - Heartbeat-based fault tolerance      (Week 3)
+        - HMAC-SHA256 message signing          (Week 4)
     """
 
     def __init__(
         self,
         host: str,
         port: int,
+        sign_key: bytes | None = None,
     ):
         self.host = host
         self.port = port
+
+        # --------------------------------------------------------
+        # Week 4 — optional HMAC signing key
+        # --------------------------------------------------------
+        self._sign_key = sign_key
 
         # --------------------------------------------------------
         # Generate a unique 160-bit node ID
@@ -112,6 +147,30 @@ class MeshNode:
         )
 
         # --------------------------------------------------------
+        # Week 3 — Heartbeat monitor
+        # --------------------------------------------------------
+
+        self.heartbeat = HeartbeatMonitor(
+            node=self,
+            interval=2.0,
+            timeout=6.0,
+            on_peer_offline=self._on_peer_offline,
+            on_peer_online=self._on_peer_online,
+        )
+
+        # --------------------------------------------------------
+        # Week 3 — Task router
+        # --------------------------------------------------------
+
+        self.router = TaskRouter(node=self)
+
+        # --------------------------------------------------------
+        # Week 3 — Task tracker (ledger)
+        # --------------------------------------------------------
+
+        self.tracker = TaskTracker(max_attempts=3)
+
+        # --------------------------------------------------------
         # Pending DHT RPC requests
         # --------------------------------------------------------
 
@@ -128,15 +187,14 @@ class MeshNode:
     # ============================================================
 
     async def start(self):
-        """
-        Start the MeshWeaver node.
-        """
+        """Start the MeshWeaver node."""
 
         await self.network.start()
 
         self.running = True
 
         await self.gossip.start()
+        await self.heartbeat.start()
 
         print()
         print("=" * 65)
@@ -154,21 +212,26 @@ class MeshNode:
         print(
             "Gossip  : every 5 seconds"
         )
+        print(
+            "Heartbeat : every 2 seconds  timeout=6 s"
+        )
+        if self._sign_key:
+            print(
+                "Security  : HMAC-SHA256 signing ENABLED"
+            )
         print("=" * 65)
         print()
 
     async def stop(self):
-        """
-        Stop the MeshWeaver node.
-        """
+        """Stop the MeshWeaver node."""
 
         self.running = False
 
         await self.gossip.stop()
+        await self.heartbeat.stop()
 
         # Cancel pending DHT requests.
         for future in self.pending_requests.values():
-
             if not future.done():
                 future.cancel()
 
@@ -224,6 +287,11 @@ class MeshNode:
             )
 
             return
+
+        # -----------------------------------------------------------
+        # Week 3 — Mark sender alive (every inbound message counts).
+        # -----------------------------------------------------------
+        self.heartbeat.mark_alive(addr)
 
         message_type = message.get(
             "type"
@@ -411,10 +479,12 @@ class MeshNode:
             response,
         )
 
-        print(
-            f"[PING] PONG sent "
-            f"to {addr[0]}:{addr[1]}"
-        )
+        # Only print non-heartbeat pings to reduce noise.
+        if not message.get("heartbeat"):
+            print(
+                f"[PING] PONG sent "
+                f"to {addr[0]}:{addr[1]}"
+            )
 
     def handle_pong(
         self,
@@ -453,13 +523,173 @@ class MeshNode:
 
                 pass
 
+        if not message.get("heartbeat"):
+            print(
+                f"[PING] PONG received "
+                f"from {addr[0]}:{addr[1]}"
+            )
+
+    # ============================================================
+    # WEEK 3 — ROUTING-AWARE TASK SUBMISSION
+    # ============================================================
+
+    async def route_task(
+        self,
+        function,
+        args=(),
+        kwargs=None,
+        max_attempts: int = 3,
+    ) -> str:
+        """
+        Serialize, route to the lowest-CPU peer, and submit a task.
+
+        Returns the task_id. Use ``wait_for_result(task_id)`` to await
+        the outcome.
+
+        Fault tolerance: if a peer goes offline before a result arrives
+        the heartbeat callback will automatically re-dispatch the task
+        to the next best available peer.
+        """
+
+        if not self.running:
+            raise RuntimeError("Mesh node is not running.")
+
+        if kwargs is None:
+            kwargs = {}
+
+        if not isinstance(args, tuple):
+            args = tuple(args)
+
+        # Serialize the function once; reuse the payload on re-routes.
+        payload = serialize_task(function, args, kwargs)
+
+        task_id = str(uuid.uuid4())
+
+        record = self.tracker.create(
+            function=function,
+            args=args,
+            kwargs=kwargs,
+            payload=payload,
+            max_attempts=max_attempts,
+            task_id=task_id,
+        )
+
+        peers = self.dht.known_peers()
+
+        # Create a router-level route record.
+        self.router.create_route(task_id, payload, peers)
+
+        await self._dispatch_task(record)
+
+        return task_id
+
+    async def _dispatch_task(self, record):
+        """
+        Pick the best peer and send the task.  May raise
+        NoAvailableNodeError if no online peer exists.
+        """
+
+        try:
+
+            peer = self.router.select_node(
+                exclude=record.tried
+            )
+
+        except NoAvailableNodeError:
+
+            self.tracker.mark_failed(
+                record.task_id,
+                "No available node for routing.",
+                final=True,
+            )
+
+            self.router.mark_failed(
+                record.task_id,
+                None,
+                "No available node.",
+            )
+
+            print(
+                f"[ROUTER] {record.task_id[:8]} — "
+                "no available node, task failed."
+            )
+
+            return
+
         print(
-            f"[PING] PONG received "
-            f"from {addr[0]}:{addr[1]}"
+            f"[ROUTER] Selected {peer.host}:{peer.port} "
+            f"for task {record.task_id[:8]}"
+        )
+
+        self.tracker.mark_dispatched(
+            record.task_id,
+            peer.address,
+            node_id_hex=peer.node_id_hex,
+        )
+
+        self.router.mark_dispatched(record.task_id, peer)
+
+        # Build and send the TASK message.
+        message = {
+            "type": "TASK",
+            "task_id": record.task_id,
+            "node_id": self.node_id_hex,
+            "task": (record.payload or
+                     serialize_task(
+                         record.function,
+                         record.args,
+                         record.kwargs,
+                     )).hex(),
+        }
+
+        # Week 4 — sign if a key is configured.
+        if self._sign_key:
+            from meshweaver.security import sign_message
+            message = sign_message(self._sign_key, message)
+
+        self.network.send(
+            encode_message(message),
+            peer.host,
+            peer.port,
+        )
+
+        print(
+            f"[TASK] {record.task_id} routed "
+            f"to {peer.host}:{peer.port}"
+        )
+
+    async def wait_for_result(
+        self,
+        task_id: str,
+        timeout: float = 60.0,
+    ):
+        """
+        Await the final outcome of a routed task.
+
+        Returns the result on success.
+        Raises TaskFailedError on permanent failure.
+        Raises asyncio.TimeoutError when ``timeout`` expires.
+        """
+
+        record = self.tracker.get(task_id)
+
+        if record is None:
+            raise KeyError(f"Unknown task_id: {task_id}")
+
+        await asyncio.wait_for(
+            record.done.wait(),
+            timeout=timeout,
+        )
+
+        if record.status is TaskStatus.COMPLETED:
+            return record.result
+
+        raise TaskFailedError(
+            record.error or "Task failed."
         )
 
     # ============================================================
-    # TASK SENDING
+    # TASK SENDING (original direct-address API — Week 1/2 compat)
     # ============================================================
 
     def send_task(
@@ -471,8 +701,9 @@ class MeshNode:
         port=None,
     ):
         """
-        Serialize and send a Python function to
-        another MeshWeaver node.
+        Serialize and send a Python function to another MeshWeaver node.
+
+        If host/port are omitted, the router selects the best available peer.
         """
 
         if not self.running:
@@ -480,6 +711,46 @@ class MeshNode:
             raise RuntimeError(
                 "Mesh node is not running."
             )
+
+        if kwargs is None:
+            kwargs = {}
+
+        if not isinstance(args, tuple):
+            args = tuple(args)
+
+        task_id = str(
+            uuid.uuid4()
+        )
+
+        serialized = serialize_task(
+            function,
+            args,
+            kwargs,
+        )
+
+        # -------------------------------------------------------------------
+        # Auto-route when no explicit destination is given.
+        # -------------------------------------------------------------------
+
+        if host is None or port is None:
+
+            peers = self.dht.known_peers()
+
+            if not peers:
+                raise NoAvailableNodeError(
+                    "No known peers available for routing."
+                )
+
+            try:
+                peer = self.router.select_worker(peers)
+                host = peer.host
+                port = peer.port
+                print(
+                    f"[ROUTER] Auto-selected {host}:{port} "
+                    f"for task {task_id[:8]}"
+                )
+            except NoAvailableNodeError:
+                raise
 
         if host is None:
 
@@ -493,44 +764,6 @@ class MeshNode:
                 "Task destination port is required."
             )
 
-        if kwargs is None:
-            kwargs = {}
-
-        if not isinstance(args, tuple):
-            args = tuple(args)
-
-        # --------------------------------------------------------
-        # Generate unique task ID
-        # --------------------------------------------------------
-
-        task_id = str(
-            uuid.uuid4()
-        )
-
-        # --------------------------------------------------------
-        # Serialize function + arguments
-        #
-        # serializer.py produces:
-        #
-        # {
-        #     "function": function,
-        #     "args": args,
-        #     "kwargs": kwargs
-        # }
-        # --------------------------------------------------------
-
-        serialized = serialize_task(
-            function,
-            args,
-            kwargs,
-        )
-
-        # --------------------------------------------------------
-        # JSON itself cannot contain bytes.
-        #
-        # Convert serialized bytes to hexadecimal text.
-        # --------------------------------------------------------
-
         message = {
             "type": "TASK",
             "task_id": task_id,
@@ -538,11 +771,35 @@ class MeshNode:
             "task": serialized.hex(),
         }
 
-        # --------------------------------------------------------
-        # Destination peer
-        # --------------------------------------------------------
+        # Week 4 — sign if a key is configured.
+        if self._sign_key:
+            from meshweaver.security import sign_message
+            message = sign_message(self._sign_key, message)
 
-        peer = Peer(
+        # Create a tracker record for this task.
+        record = self.tracker.create(
+            function=function,
+            args=args,
+            kwargs=kwargs,
+            payload=serialized,
+            task_id=task_id,
+        )
+
+        self.tracker.mark_dispatched(
+            task_id,
+            (host, port),
+        )
+
+        # Create a router route record.
+        peer_obj = Peer(
+            node_id=generate_node_id(f"{host}:{port}"),
+            host=host,
+            port=port,
+        )
+        self.router.create_route(task_id, serialized, [peer_obj])
+        self.router.mark_dispatched(task_id, peer_obj)
+
+        peer_dest = Peer(
             node_id=generate_node_id(
                 f"{host}:{port}"
             ),
@@ -550,14 +807,10 @@ class MeshNode:
             port=port,
         )
 
-        # --------------------------------------------------------
-        # Send UDP packet
-        # --------------------------------------------------------
-
         self.network.send(
             encode_message(message),
-            peer.host,
-            peer.port,
+            peer_dest.host,
+            peer_dest.port,
         )
 
         print(
@@ -579,6 +832,18 @@ class MeshNode:
         """
         Receive, deserialize and execute a remote task.
         """
+
+        # Week 4 — verify signature when key is configured.
+        if self._sign_key:
+            from meshweaver.security import verify_message, SignatureError
+            try:
+                verify_message(self._sign_key, message)
+            except SignatureError as exc:
+                print(
+                    f"[SECURITY] Rejected task from "
+                    f"{addr}: {exc}"
+                )
+                return
 
         task_id = message.get(
             "task_id"
@@ -637,19 +902,6 @@ class MeshNode:
                 serialized
             )
 
-            # IMPORTANT:
-            #
-            # serializer.py returns a DICTIONARY:
-            #
-            # {
-            #     "function": ...,
-            #     "args": ...,
-            #     "kwargs": ...
-            # }
-            #
-            # Therefore we MUST access dictionary keys.
-            # ----------------------------------------------------
-
             function = task_data[
                 "function"
             ]
@@ -683,18 +935,10 @@ class MeshNode:
                 f"{addr[0]}:{addr[1]}"
             )
 
-            # ----------------------------------------------------
-            # Execute remote function
-            # ----------------------------------------------------
-
             result = function(
                 *args,
                 **kwargs,
             )
-
-            # ----------------------------------------------------
-            # Send successful result
-            # ----------------------------------------------------
 
             await self._send_task_result(
                 task_id=task_id,
@@ -715,10 +959,6 @@ class MeshNode:
                 f"[TASK] {task_id} failed: "
                 f"{exc}"
             )
-
-            # ----------------------------------------------------
-            # Send failure result
-            # ----------------------------------------------------
 
             await self._send_task_result(
                 task_id=task_id,
@@ -792,6 +1032,15 @@ class MeshNode:
                 f"{result!s}"
             )
 
+            # Update tracker and router.
+            record = self.tracker.get(task_id)
+            if record and record.status is TaskStatus.DISPATCHED:
+                self.tracker.mark_completed(task_id, result)
+
+            route = self.router.get_route(task_id)
+            if route and route.status == "running":
+                self.router.mark_completed(task_id, result)
+
         else:
 
             error = message.get(
@@ -804,6 +1053,127 @@ class MeshNode:
                 f"{task_id} failed: "
                 f"{error}"
             )
+
+            record = self.tracker.get(task_id)
+
+            if record and record.status is TaskStatus.DISPATCHED:
+
+                if self.tracker.can_retry(task_id):
+
+                    self.tracker.mark_failed(
+                        task_id,
+                        error,
+                        final=False,
+                    )
+
+                    route = self.router.get_route(task_id)
+                    if route:
+                        self.router.mark_failed(
+                            task_id,
+                            route.current_peer,
+                            error,
+                        )
+
+                    asyncio.create_task(
+                        self._dispatch_task(record)
+                    )
+
+                else:
+
+                    self.tracker.mark_failed(
+                        task_id,
+                        error,
+                        final=True,
+                    )
+
+                    route = self.router.get_route(task_id)
+                    if route:
+                        self.router.mark_failed(
+                            task_id,
+                            route.current_peer,
+                            error,
+                        )
+
+    # ============================================================
+    # WEEK 3 — FAULT TOLERANCE CALLBACKS
+    # ============================================================
+
+    def _on_peer_offline(self, address):
+        """
+        Heartbeat callback: a peer went offline.
+
+        Mark its DISPATCHED tasks as failed and re-route them.
+        """
+
+        affected = self.tracker.dispatched_to(address)
+
+        if not affected:
+            return
+
+        print(
+            f"[FAULT] {address[0]}:{address[1]} offline — "
+            f"{len(affected)} task(s) need re-routing."
+        )
+
+        for record in affected:
+
+            self.tracker.mark_failed(
+                record.task_id,
+                f"Node {address[0]}:{address[1]} went offline.",
+                final=False,
+            )
+
+            route = self.router.get_route(record.task_id)
+            if route:
+                self.router.mark_failed(
+                    record.task_id,
+                    route.current_peer,
+                    "node offline",
+                )
+
+            if self.tracker.can_retry(record.task_id):
+
+                asyncio.create_task(
+                    self._dispatch_task(record)
+                )
+
+            else:
+
+                self.tracker.mark_failed(
+                    record.task_id,
+                    "Max retries exceeded after node failure.",
+                    final=True,
+                )
+
+    def _on_peer_online(self, address):
+        """
+        Heartbeat callback: a peer came back online.
+        """
+
+        print(
+            f"[FAULT] {address[0]}:{address[1]} is back online."
+        )
+
+    # ============================================================
+    # WEEK 3 — send_to_address (required by HeartbeatMonitor)
+    # ============================================================
+
+    async def send_to_address(
+        self,
+        address: tuple,
+        message: dict,
+    ):
+        """
+        Encode and send a protocol message to a raw (host, port) tuple.
+
+        Used by HeartbeatMonitor to send lightweight PING probes.
+        """
+
+        self.network.send(
+            encode_message(message),
+            address[0],
+            address[1],
+        )
 
     # ============================================================
     # DHT FIND_NODE
@@ -1056,7 +1426,7 @@ class MeshNode:
 
     def get_peer_metrics(self):
         """
-        Return remote peer metrics.
+        Return remote peer metrics (from gossip engine).
         """
 
         return self.gossip.get_peer_metrics()
