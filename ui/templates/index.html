@@ -283,6 +283,18 @@
                       </button>
                     </div>
                   </div>
+                  <div class="spec-row telemetry-spec-row">
+                    <span class="spec-name">Local CPU / RAM</span>
+                    <code class="spec-telemetry" id="local-metrics">— / —</code>
+                  </div>
+                  <div class="spec-row">
+                    <span class="spec-name">Task Ledger</span>
+                    <code class="spec-telemetry" id="task-summary">0 pending · 0 running</code>
+                  </div>
+                  <div class="spec-row">
+                    <span class="spec-name">Security</span>
+                    <span class="security-state" id="security-status" data-enabled="false">HMAC OFF</span>
+                  </div>
                 </div>
               </article>
             </div>
@@ -369,7 +381,7 @@
                     <th>Workload Operation</th>
                     <th>Target Node</th>
                     <th>Dispatched Time</th>
-                    <th>Payload Signature</th>
+                    <th>Result / Route History</th>
                     <th>Execution Status</th>
                   </tr>
                 </thead>
@@ -509,6 +521,17 @@
           </div>
 
           <div class="form-row">
+            <div class="form-group flex-1">
+              <label for="task-routing">Routing Strategy</label>
+              <select id="task-routing" name="routing" class="form-select">
+                <option value="direct">Direct target</option>
+                <option value="least-loaded">Least-loaded peer (router)</option>
+              </select>
+              <span class="form-hint">Least-loaded mode uses Week 3 CPU/RAM gossip and heartbeat state.</span>
+            </div>
+          </div>
+
+          <div class="form-row" id="task-target-row">
             <div class="form-group flex-1">
               <label for="task-host">Target Peer Host</label>
               <input id="task-host" name="host" class="form-input" value="127.0.0.1" autocomplete="off" required>
