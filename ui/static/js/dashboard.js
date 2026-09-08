@@ -176,7 +176,10 @@
 
     // Metrics & Specs
     const peerCount = (status.peers && Array.isArray(status.peers)) ? status.peers.length : 0;
-    const taskCount = (status.tasks && Array.isArray(status.tasks)) ? status.tasks.length : 0;
+    const onlinePeerCount = (status.peers || []).filter((peer) => String(peer.status).toLowerCase() === 'online').length;
+    const summary = status.task_summary || {};
+    const taskCount = Object.values(summary).reduce((total, value) => total + Number(value || 0), 0)
+      || ((status.tasks && Array.isArray(status.tasks)) ? status.tasks.length : 0);
     const eventCount = (status.events && Array.isArray(status.events)) ? status.events.length : 0;
 
     const peerCountEl = $('#peer-count');
@@ -229,6 +232,24 @@
       if (copyAddrBtn) copyAddrBtn.disabled = true;
     }
 
+    const localMetrics = status.local_metrics || {};
+    const localMetricsEl = $('#local-metrics');
+    if (localMetricsEl) {
+      localMetricsEl.textContent = isOnline
+        ? `${Number(localMetrics.cpu_percent ?? 0).toFixed(1)}% / ${Number(localMetrics.memory_percent ?? 0).toFixed(1)}%`
+        : '— / —';
+    }
+    const taskSummaryEl = $('#task-summary');
+    if (taskSummaryEl) {
+      taskSummaryEl.textContent = `${summary.PENDING || 0} pending · ${summary.DISPATCHED || 0} running`;
+    }
+    const securityState = $('#security-status');
+    if (securityState) {
+      const enabled = !!status.security?.signing_enabled;
+      securityState.dataset.enabled = enabled ? 'true' : 'false';
+      securityState.textContent = enabled ? 'HMAC ON' : 'HMAC OFF';
+    }
+
     // Radar Center Hub
     const radarCore = $('#radar-core');
     if (radarCore) {
@@ -246,7 +267,7 @@
       } else if (peerCount === 0) {
         radarCaption.textContent = `Node active on ${status.address}. Ping a peer (e.g. 127.0.0.1:4801) to link onto radar.`;
       } else {
-        radarCaption.textContent = `${peerCount} active peer(s) in orbit. Live packet telemetry streaming across datagram links.`;
+        radarCaption.textContent = `${onlinePeerCount} online / ${peerCount} known peer(s). Heartbeat and packet telemetry streaming.`;
       }
     }
 
@@ -287,6 +308,10 @@
         const rawName = String(peer.name ?? 'P');
         const initial = rawName.charAt(0).toUpperCase() || 'P';
         const displayId = truncateMiddle(rawName, 8, 6);
+        const isOnline = String(peer.status || 'Online').toLowerCase() === 'online';
+        const cpu = peer.cpu_percent == null ? '—' : `${Number(peer.cpu_percent).toFixed(1)}%`;
+        const ram = peer.memory_percent == null ? '—' : `${Number(peer.memory_percent).toFixed(1)}%`;
+        const seen = peer.last_seen_ago == null ? 'never' : `${Number(peer.last_seen_ago).toFixed(1)}s ago`;
         return `
         <div class="peer-card-item">
           <div class="peer-main-info">
@@ -294,9 +319,14 @@
             <div class="peer-meta">
               <div class="peer-name-row">
                 <span class="peer-node-id" title="${esc(rawName)}">${esc(displayId)}</span>
-                <span class="peer-online-tag">ONLINE</span>
+                <span class="peer-online-tag ${isOnline ? '' : 'offline'}">${isOnline ? 'ONLINE' : 'OFFLINE'}</span>
               </div>
               <span class="peer-endpoint">${esc(peer.host)}:${esc(peer.port)}</span>
+              <span class="peer-telemetry">
+                <span>CPU <b>${esc(cpu)}</b></span>
+                <span>RAM <b>${esc(ram)}</b></span>
+                <span class="peer-heartbeat ${isOnline ? '' : 'offline'}">HB ${esc(seen)}</span>
+              </span>
             </div>
           </div>
           <div class="peer-actions-row">
@@ -386,7 +416,15 @@
         const isFailed = statusStr.toLowerCase() === 'failed';
         const resultDisplay = (t.result !== undefined && t.result !== null)
           ? `<strong style="color: var(--color-emerald); font-family: var(--font-mono); font-size: 12px;">➔ ${esc(t.result)}</strong>`
-          : `<span style="color: var(--color-cyan); font-size: 11px;">${esc(t.args ? `args(${t.args})` : `op='${t.name}'`)}</span>`;
+          : (isFailed && t.error)
+            ? `<strong style="color: var(--color-rose); font-family: var(--font-mono); font-size: 12px;">${esc(t.error)}</strong>`
+            : `<span style="color: var(--color-cyan); font-size: 11px;">${esc(t.args ? `args(${t.args})` : `op='${t.name}'`)}</span>`;
+        const attempts = `${Number(t.attempts || 0)}/${Number(t.max_attempts || 0)}`;
+        const routeStatus = t.route_status ? String(t.route_status).toUpperCase() : '—';
+        const history = Array.isArray(t.history) ? t.history : [];
+        const historyDisplay = history.length
+          ? `<details class="task-history"><summary>${esc(attempts)} attempts · history</summary><ul class="task-history-list">${history.map((item) => `<li>${esc(item)}</li>`).join('')}</ul></details>`
+          : '';
         return `
         <tr>
           <td>
@@ -397,7 +435,13 @@
           </td>
           <td><code>${esc(t.target)}</code></td>
           <td>${esc(t.time)}</td>
-          <td>${resultDisplay}</td>
+          <td>
+            <div class="task-route-detail">
+              <div class="task-result-line">${resultDisplay}</div>
+              <span class="task-route-line">route: ${esc(routeStatus)} · attempts: ${esc(attempts)}</span>
+              ${historyDisplay}
+            </div>
+          </td>
           <td>
             <span class="status-glow-pill ${isCompleted ? 'completed' : (isFailed ? 'failed' : '')}">${esc(statusStr)}</span>
           </td>
@@ -452,6 +496,7 @@
           ...peer,
           x: cx + Math.cos(theta) * radius,
           y: cy + Math.sin(theta) * radius,
+          online: String(peer.status || 'Online').toLowerCase() === 'online',
           initial: nameStr.charAt(0).toUpperCase() || 'P',
         };
       });
@@ -542,14 +587,14 @@
         ctx.arc(peer.x, peer.y, 18, 0, Math.PI * 2);
         ctx.fillStyle = 'rgba(0, 240, 255, 0.12)';
         ctx.fill();
-        ctx.strokeStyle = COLORS.cyan;
+        ctx.strokeStyle = peer.online ? COLORS.cyan : COLORS.rose;
         ctx.lineWidth = 1.5;
         ctx.stroke();
 
         // Node Inner Dot
         ctx.beginPath();
         ctx.arc(peer.x, peer.y, 7, 0, Math.PI * 2);
-        ctx.fillStyle = COLORS.cyan;
+        ctx.fillStyle = peer.online ? COLORS.cyan : COLORS.rose;
         ctx.fill();
 
         // Node Label
@@ -670,6 +715,9 @@
     const secondInput = $('#task-second');
     const secondBox = $('#second-val-box');
     const firstLabel = $('#label-first');
+    const routingSelect = $('#task-routing');
+    const targetRow = $('#task-target-row');
+    const targetInputs = [$('#task-host'), $('#task-port')].filter(Boolean);
 
     function updateTaskPreview() {
       if (!taskOp || !firstInput) return;
@@ -678,16 +726,21 @@
       const second = secondInput?.value || '';
       const host = $('#task-host')?.value || '127.0.0.1';
       const port = $('#task-port')?.value || '4801';
+      const routing = routingSelect?.value || 'direct';
       const previewCode = $('#task-preview-code');
+
+      if (targetRow) targetRow.style.display = routing === 'least-loaded' ? 'none' : 'flex';
+      targetInputs.forEach((input) => { input.required = routing !== 'least-loaded'; });
+      const destination = routing === 'least-loaded' ? 'router.select_least_loaded_peer()' : `'${host}:${port}'`;
 
       if (op === 'echo') {
         if (secondBox) secondBox.style.display = 'none';
         if (firstLabel) firstLabel.textContent = 'Echo Text Message';
-        if (previewCode) previewCode.textContent = `meshweaver.dispatch(echo, args=('${first}',), dest='${host}:${port}')`;
+        if (previewCode) previewCode.textContent = `meshweaver.dispatch(echo, args=('${first}',), route=${destination})`;
       } else {
         if (secondBox) secondBox.style.display = 'flex';
         if (firstLabel) firstLabel.textContent = 'Left Value (Number)';
-        if (previewCode) previewCode.textContent = `meshweaver.dispatch(${op}, args=(${first || 0}, ${second || 0}), dest='${host}:${port}')`;
+        if (previewCode) previewCode.textContent = `meshweaver.dispatch(${op}, args=(${first || 0}, ${second || 0}), route=${destination})`;
       }
     }
 
@@ -708,6 +761,8 @@
       if (secondInput) secondInput.addEventListener('input', updateTaskPreview);
       $('#task-host')?.addEventListener('input', updateTaskPreview);
       $('#task-port')?.addEventListener('input', updateTaskPreview);
+      routingSelect?.addEventListener('change', updateTaskPreview);
+      updateTaskPreview();
     }
 
     // Node Form Submit
@@ -755,6 +810,7 @@
           operation: taskOp?.value || 'echo',
           first: (firstInput?.value || '').trim(),
           second: (secondInput?.value || '').trim(),
+          routing: routingSelect?.value || 'direct',
           host: ($('#task-host')?.value || '127.0.0.1').trim(),
           port: ($('#task-port')?.value || '4801').trim(),
         };
@@ -762,7 +818,8 @@
           const res = await api('/api/tasks/submit', payload);
           closeModal($('#task-modal'));
           render(res);
-          showToast('Task Dispatched', `${payload.operation}() dispatched to ${payload.host}:${payload.port}`);
+          const destination = payload.routing === 'least-loaded' ? 'the least-loaded online peer' : `${payload.host}:${payload.port}`;
+          showToast('Task Dispatched', `${payload.operation}() routed to ${destination}`);
         } catch (err) {
           showToast('Task Dispatch Error', err.message, true);
         }
@@ -842,8 +899,13 @@
       if (taskBtn) {
         const hostInput = $('#task-host');
         const portInput = $('#task-port');
+        const routingSelect = $('#task-routing');
         if (hostInput) hostInput.value = taskBtn.dataset.taskHost;
         if (portInput) portInput.value = taskBtn.dataset.taskPort;
+        if (routingSelect) {
+          routingSelect.value = 'direct';
+          routingSelect.dispatchEvent(new Event('change'));
+        }
         openModal('#task-modal');
       }
     });
