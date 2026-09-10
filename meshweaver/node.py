@@ -237,7 +237,7 @@ class MeshNode:
 
         self.pending_requests.clear()
 
-        self.network.close()
+        await self.network.close()
 
         print(
             f"[NODE] {self.node_id_hex} stopped."
@@ -259,12 +259,27 @@ class MeshNode:
         the received message.
         """
 
-        asyncio.create_task(
+        if not self.running:
+            return
+
+        task = asyncio.create_task(
             self._handle_message(
                 data,
                 addr,
             )
         )
+        task.add_done_callback(self._consume_message_task)
+
+    @staticmethod
+    def _consume_message_task(task):
+        """Consume late UDP callback errors during node shutdown."""
+
+        try:
+            task.result()
+        except asyncio.CancelledError:
+            pass
+        except Exception as exc:
+            print(f"[NETWORK] Message handling stopped: {exc}")
 
     async def _handle_message(
         self,
@@ -274,6 +289,9 @@ class MeshNode:
         """
         Decode and route an incoming protocol message.
         """
+
+        if not self.running:
+            return
 
         try:
 
@@ -1405,11 +1423,23 @@ class MeshNode:
         Encode and send a protocol message.
         """
 
-        self.network.send(
-            encode_message(message),
-            peer.host,
-            peer.port,
-        )
+        if not self.running:
+            return False
+
+        try:
+            self.network.send(
+                encode_message(message),
+                peer.host,
+                peer.port,
+            )
+        except RuntimeError:
+            # A UDP callback can race with stop(); late shutdown responses
+            # are harmless and must not create unhandled task exceptions.
+            if not self.running:
+                return False
+            raise
+
+        return True
 
     # ============================================================
     # GOSSIP HELPERS
