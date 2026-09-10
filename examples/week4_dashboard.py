@@ -19,7 +19,7 @@ Usage
 Optional flags
 ──────────────
     --sign      Enable HMAC-SHA256 message signing for TASK messages.
-                Generates a random key if MESHWEAVER_KEY env var is not set.
+                Requires the same MESHWEAVER_KEY used by the worker.
 
     --tasks N   Submit N background tasks to stress-test routing (default 0).
 """
@@ -31,7 +31,7 @@ import time
 
 from meshweaver.dashboard import MeshDashboard
 from meshweaver.node import MeshNode
-from meshweaver.security import generate_key, key_from_env
+from meshweaver.security import key_from_env
 
 
 # ---------------------------------------------------------------------------
@@ -91,7 +91,12 @@ async def main():
     sign_key = None
 
     if args.sign:
-        sign_key = key_from_env() or generate_key()
+        sign_key = key_from_env()
+        if sign_key is None:
+            raise SystemExit(
+                "[SECURITY] --sign requires MESHWEAVER_KEY to be set "
+                "so the worker can use the same shared key."
+            )
         print(
             f"[SECURITY] HMAC-SHA256 signing enabled.  "
             f"Key: {sign_key.hex()[:16]}..."
@@ -104,7 +109,16 @@ async def main():
         sign_key=sign_key,
     )
 
-    await node.start()
+    try:
+        await node.start()
+    except OSError as exc:
+        if getattr(exc, "winerror", None) == 10048 or getattr(exc, "errno", None) in (48, 98):
+            print(
+                f"[STARTUP ERROR] UDP port {args.port} is already in use. "
+                "Stop the other MeshWeaver process or choose another --port."
+            )
+            return
+        raise
 
     # ── Register workers ──────────────────────────────────────────────────
     print(f"\n[DEMO] Registering {len(workers)} worker(s)...")
