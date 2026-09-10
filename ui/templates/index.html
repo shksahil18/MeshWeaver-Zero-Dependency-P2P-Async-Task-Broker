@@ -436,6 +436,23 @@
             </div>
           </div>
 
+          <div class="security-form-panel">
+            <label class="security-toggle" for="node-signing">
+              <input id="node-signing" name="signing_enabled" type="checkbox">
+              <span>
+                <strong>Enable HMAC-SHA256 signing</strong>
+                <small>Authenticate TASK messages sent by this node.</small>
+              </span>
+            </label>
+            <div class="form-group security-key-group" id="node-key-group" hidden>
+              <label for="node-key">Shared HMAC Key (hex)</label>
+              <input id="node-key" name="sign_key" type="password" class="form-input" placeholder="64 hexadecimal characters" autocomplete="new-password">
+              <button type="button" class="chip-btn security-generate-key" id="node-generate-key">Generate secure key</button>
+              <button type="button" class="chip-btn security-generate-key" id="node-copy-key">Copy key for worker</button>
+              <span class="form-hint">Use the same key on the worker node. Leave blank to use MESHWEAVER_KEY. The key is never returned by the API.</span>
+            </div>
+          </div>
+
           <div class="modal-footer">
             <button type="button" class="btn-action btn-outline modal-cancel">Cancel</button>
             <button type="submit" class="btn-action btn-glow">Initialize Node</button>
