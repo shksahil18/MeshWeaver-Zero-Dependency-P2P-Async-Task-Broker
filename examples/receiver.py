@@ -2,6 +2,7 @@ import argparse
 import asyncio
 
 from meshweaver.node import MeshNode
+from meshweaver.security import key_from_env
 
 
 async def main():
@@ -22,11 +23,26 @@ async def main():
         help="UDP port",
     )
 
+    parser.add_argument(
+        "--sign",
+        action="store_true",
+        help="Verify HMAC-SHA256 task signatures using MESHWEAVER_KEY.",
+    )
+
     args = parser.parse_args()
+
+    sign_key = None
+    if args.sign:
+        sign_key = key_from_env()
+        if sign_key is None:
+            raise SystemExit(
+                "[SECURITY] --sign requires MESHWEAVER_KEY to be set."
+            )
 
     node = MeshNode(
         host=args.host,
         port=args.port,
+        sign_key=sign_key,
     )
 
     await node.start()
