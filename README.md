@@ -405,7 +405,9 @@ python examples/receiver.py --port 9002
 # Run the live dashboard
 python examples/week4_dashboard.py --port 9001 --worker 127.0.0.1:9002
 
-# With HMAC signing + submit tasks
+# With HMAC signing + submit tasks (use the same key in both processes)
+export MESHWEAVER_KEY=$(python -c "import secrets; print(secrets.token_hex(32))")
+python examples/receiver.py --port 9002 --sign
 python examples/week4_dashboard.py --port 9001 --worker 127.0.0.1:9002 --sign --tasks 5
 ```
 
