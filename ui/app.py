@@ -33,14 +33,46 @@ def multiply(left=1, right=1):
 TASKS = {"echo": echo, "add": add, "multiply": multiply}
 
 
+def parse_dashboard_key(raw_key):
+    """Normalize a UI-pasted HMAC key and return its byte representation."""
+
+    value = str(raw_key or "").strip()
+    if not value:
+        return None
+
+    # Accept common copy/paste forms: quotes, 0x prefixes, and shell
+    # assignments such as MESHWEAVER_KEY=<hex>.
+    if "=" in value:
+        value = value.split("=", 1)[1].strip()
+    if ":" in value and value.lower().split(":", 1)[0] in {"key", "meshweaver_key"}:
+        value = value.split(":", 1)[1].strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+        value = value[1:-1].strip()
+    if value.lower().startswith("0x"):
+        value = value[2:]
+    value = "".join(value.split())
+
+    try:
+        key = bytes.fromhex(value)
+    except ValueError as error:
+        raise ValueError(
+            "HMAC key must be hexadecimal. Paste only the 64-character key, "
+            "without a password or command text."
+        ) from error
+
+    if len(key) < 16:
+        raise ValueError("HMAC key must be at least 16 bytes (32 hex characters).")
+    return key
+
+
 class DashboardNode(MeshNode):
     """Observe broker events for the dashboard while retaining node behavior."""
 
-    def __init__(self, host, port, on_event):
+    def __init__(self, host, port, on_event, sign_key=None):
         # The optional shared key keeps the web adapter aligned with the
         # Week 4 security feature without adding a new UI control.  When the
         # environment variable is absent, MeshNode keeps its unsigned mode.
-        super().__init__(host, port, sign_key=key_from_env())
+        super().__init__(host, port, sign_key=sign_key if sign_key is not None else key_from_env())
         self._on_event = on_event
         self._base_peer_offline = self.heartbeat.on_peer_offline
         self._base_peer_online = self.heartbeat.on_peer_online
@@ -106,11 +138,11 @@ class NodeController:
     def _run(self, coroutine):
         return asyncio.run_coroutine_threadsafe(coroutine, self._loop).result(timeout=6)
 
-    async def _start(self, host, port):
+    async def _start(self, host, port, sign_key=None):
         with self._lock:
             if self._node is not None:
                 return
-            self._node = DashboardNode(host, port, self._event)
+            self._node = DashboardNode(host, port, self._event, sign_key=sign_key)
             node = self._node
         try:
             await node.start()
@@ -120,8 +152,8 @@ class NodeController:
             raise
         self._event("system", f"Local node started at {host}:{port}")
 
-    def start(self, host, port):
-        self._run(self._start(host, port))
+    def start(self, host, port, sign_key=None):
+        self._run(self._start(host, port, sign_key))
 
     async def _stop(self):
         with self._lock:
@@ -292,9 +324,26 @@ def status():
 def start_node():
     try:
         payload = request.get_json(silent=True) or {}
-        controller.start(request_value(payload, "host", "127.0.0.1"), request_port(payload))
+        sign_key = None
+        if bool(payload.get("signing_enabled")):
+            raw_key = str(payload.get("sign_key", "")).strip()
+            if raw_key:
+                sign_key = parse_dashboard_key(raw_key)
+            else:
+                sign_key = key_from_env()
+                if sign_key is None:
+                    raise ValueError("Enable HMAC signing only after entering a key or setting MESHWEAVER_KEY.")
+        controller.start(
+            request_value(payload, "host", "127.0.0.1"),
+            request_port(payload),
+            sign_key,
+        )
         return jsonify(controller.snapshot())
-    except (ValueError, TimeoutError, OSError) as error:
+    except OSError as error:
+        if getattr(error, "winerror", None) == 10048 or getattr(error, "errno", None) in (48, 98):
+            return jsonify(error="That UDP port is already in use. Stop the other node or choose another port."), 400
+        return jsonify(error=str(error)), 400
+    except (ValueError, TimeoutError) as error:
         return jsonify(error=str(error)), 400
 
 
