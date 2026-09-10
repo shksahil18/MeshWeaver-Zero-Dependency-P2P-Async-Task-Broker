@@ -6,8 +6,9 @@ class MeshUDPProtocol(asyncio.DatagramProtocol):
     Async UDP protocol used by MeshWeaver.
     """
 
-    def __init__(self, on_message):
+    def __init__(self, on_message, on_connection_lost=None):
         self.on_message = on_message
+        self.on_connection_lost = on_connection_lost
         self.transport = None
 
     def connection_made(self, transport):
@@ -30,6 +31,8 @@ class MeshUDPProtocol(asyncio.DatagramProtocol):
 
     def connection_lost(self, exc):
         self.transport = None
+        if self.on_connection_lost is not None:
+            self.on_connection_lost()
 
 
 class UDPNetwork:
@@ -47,14 +50,17 @@ class UDPNetwork:
         self.port = port
         self.on_message = on_message
         self.transport = None
+        self._closed_event = None
 
     async def start(self):
         loop = asyncio.get_running_loop()
+        self._closed_event = asyncio.Event()
 
         transport, _ = (
             await loop.create_datagram_endpoint(
                 lambda: MeshUDPProtocol(
-                    self.on_message
+                    self.on_message,
+                    self._closed_event.set,
                 ),
                 local_addr=(
                     self.host,
@@ -81,9 +87,24 @@ class UDPNetwork:
             (host, port),
         )
 
-    def close(self):
-        if self.transport is not None:
+    async def close(self):
+        """Close the transport and wait until the OS releases its socket."""
 
-            self.transport.close()
+        transport = self.transport
+        closed_event = self._closed_event
+        if transport is None:
+            return
 
-            self.transport = None
+        transport.close()
+        self.transport = None
+
+        # Windows completes UDP close asynchronously. Waiting for
+        # connection_lost prevents an immediate restart from raising
+        # WinError 10048 for the same local port.
+        if closed_event is not None:
+            try:
+                await asyncio.wait_for(closed_event.wait(), timeout=1.0)
+            except asyncio.TimeoutError:
+                await asyncio.sleep(0)
+
+        self._closed_event = None
