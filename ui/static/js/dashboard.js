@@ -767,14 +767,58 @@
 
     // Node Form Submit
     const nodeForm = $('#node-form');
+    const signingToggle = $('#node-signing');
+    const signingKeyGroup = $('#node-key-group');
+    const signingKeyInput = $('#node-key');
+    const generateKeyButton = $('#node-generate-key');
+    const copyKeyButton = $('#node-copy-key');
+    const syncSigningFields = () => {
+      const enabled = !!signingToggle?.checked;
+      if (signingKeyGroup) signingKeyGroup.hidden = !enabled;
+      // An empty field is valid when the Flask process already has
+      // MESHWEAVER_KEY in its environment.
+      if (signingKeyInput) signingKeyInput.required = false;
+    };
+    signingToggle?.addEventListener('change', syncSigningFields);
+    syncSigningFields();
+    generateKeyButton?.addEventListener('click', () => {
+      if (!window.crypto?.getRandomValues || !signingKeyInput) {
+        showToast('Key Generation Failed', 'Secure browser randomness is unavailable.', true);
+        return;
+      }
+      const bytes = new Uint8Array(32);
+      window.crypto.getRandomValues(bytes);
+      signingKeyInput.value = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+      showToast('Secure Key Generated', 'Copy this key to the worker before starting it.');
+    });
+    copyKeyButton?.addEventListener('click', async () => {
+      const key = signingKeyInput?.value?.trim();
+      if (!key) {
+        showToast('No Key Available', 'Generate or enter an HMAC key first.', true);
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(key);
+        showToast('Key Copied', 'Use the same key in the worker MESHWEAVER_KEY variable.');
+      } catch (_) {
+        showToast('Copy Failed', 'Copy the key manually from the field.', true);
+      }
+    });
     if (nodeForm) {
       nodeForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const host = ($('#node-host')?.value || '127.0.0.1').trim();
         const port = ($('#node-port')?.value || '4800').trim();
+        const signingEnabled = !!signingToggle?.checked;
         try {
-          const res = await api('/api/node/start', { host, port });
+          const res = await api('/api/node/start', {
+            host,
+            port,
+            signing_enabled: signingEnabled,
+            sign_key: signingEnabled ? (signingKeyInput?.value || '').trim() : '',
+          });
           closeModal($('#node-modal'));
+          if (signingKeyInput) signingKeyInput.value = '';
           render(res);
           showToast('Node Online', `Listening on ${res.address || `${host}:${port}`}`);
         } catch (err) {
